@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub User Creation Date</title>
+    <title>GitHub User Creation Date & Age</title>
     <!-- Bootstrap CSS from CDN -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <style>
@@ -18,10 +18,11 @@
         .form-label {
             font-weight: bold;
         }
-        #github-created-at {
-            font-size: 1.2em;
+        #github-created-at, #github-account-age {
+            font-size: 1.1em; /* Slightly adjusted for two lines */
             font-weight: bold;
             color: #007bff;
+            display: inline-block; /* To allow strong tag to align better */
         }
         .error-message {
             color: #dc3545;
@@ -43,10 +44,10 @@
 <body>
     <div id="github-status" aria-live="polite" class="visually-hidden"></div>
     <div class="container">
-        <h1 class="mb-4 text-center">GitHub User Creation Date</h1>
+        <h1 class="mb-4 text-center">GitHub User Creation Date & Age</h1>
 
         <div class="card shadow-sm p-4 mb-4">
-            <p class="card-text">Enter a GitHub username below to find out when their account was created. If you have a personal access token, you can append it to the URL as <code>?token=YOUR_TOKEN</code> to increase API rate limits.</p>
+            <p class="card-text">Enter a GitHub username below to find out when their account was created and its age. If you have a personal access token, you can append it to the URL as <code>?token=YOUR_TOKEN</code> to increase API rate limits.</p>
             <form id="github-user-12345" class="needs-validation" novalidate>
                 <div class="mb-3">
                     <label for="usernameInput" class="form-label">GitHub Username:</label>
@@ -55,14 +56,15 @@
                         Please enter a GitHub username.
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary w-100">Get Creation Date</button>
+                <button type="submit" class="btn btn-primary w-100">Get Details</button>
             </form>
             <div id="errorMessage" class="error-message text-center mt-3"></div>
         </div>
 
         <div class="card shadow-sm p-4">
-            <h5 class="card-title text-center">Account Creation Date:</h5>
-            <p id="github-created-at" class="text-center">---</p>
+            <h5 class="card-title text-center">GitHub Account Details:</h5>
+            <p class="text-center mb-1"><strong>Creation Date:</strong> <span id="github-created-at">---</span></p>
+            <p class="text-center mb-0"><strong>Account Age:</strong> <span id="github-account-age">---</span></p>
         </div>
     </div>
 
@@ -74,8 +76,9 @@
             const githubForm = document.querySelector("#github-user-12345");
             const usernameInput = document.getElementById("usernameInput");
             const createdAtDisplay = document.getElementById("github-created-at");
+            const accountAgeDisplay = document.getElementById("github-account-age"); // New: Reference to account age display
             const errorMessageDisplay = document.getElementById("errorMessage");
-            const githubStatusDisplay = document.getElementById("github-status"); // New: Reference to aria-live region
+            const githubStatusDisplay = document.getElementById("github-status");
 
             // Function to get a URL parameter
             function getUrlParameter(name) {
@@ -90,21 +93,22 @@
 
                 // Reset previous states
                 createdAtDisplay.textContent = '---';
+                accountAgeDisplay.textContent = '---'; // Reset account age
                 errorMessageDisplay.textContent = '';
                 githubForm.classList.remove('was-validated');
-                githubStatusDisplay.textContent = ''; // New: Clear previous status
+                githubStatusDisplay.textContent = '';
 
                 // Form validation
                 if (!githubForm.checkValidity()) {
                     githubForm.classList.add('was-validated');
-                    githubStatusDisplay.textContent = "Please enter a GitHub username to proceed with lookup."; // New: Status for validation error
+                    githubStatusDisplay.textContent = "Please enter a GitHub username to proceed with lookup.";
                     return;
                 }
 
                 const username = usernameInput.value.trim();
                 if (!username) {
                     errorMessageDisplay.textContent = "Please enter a GitHub username.";
-                    githubStatusDisplay.textContent = "Please enter a GitHub username."; // New: Status for empty username
+                    githubStatusDisplay.textContent = "Please enter a GitHub username.";
                     return;
                 }
 
@@ -118,7 +122,7 @@
                     headers['Authorization'] = `token ${githubToken}`;
                 }
 
-                githubStatusDisplay.textContent = `Looking up GitHub user "${username}"...`; // New: Status for lookup start
+                githubStatusDisplay.textContent = `Looking up GitHub user "${username}"...`;
 
                 try {
                     const response = await fetch(githubApiUrl, { headers: headers });
@@ -132,26 +136,42 @@
                         } else {
                             errorMsg = `GitHub API error: ${response.status} - ${response.statusText}`;
                         }
-                        throw new Error(errorMsg); // Throw error to be caught below
+                        throw new Error(errorMsg);
                     }
 
                     const data = await response.json();
 
                     if (data.created_at) {
+                        const creationDate = new Date(data.created_at);
                         // Format the date to YYYY-MM-DD UTC
-                        // new Date().toISOString() returns YYYY-MM-DDTHH:mm:ss.sssZ
-                        // We take the part before 'T'
-                        const createdAtUtc = new Date(data.created_at).toISOString().split('T')[0];
+                        const createdAtUtc = creationDate.toISOString().split('T')[0];
+
+                        // Calculate age in whole years
+                        const today = new Date();
+                        let ageInYears = today.getFullYear() - creationDate.getFullYear();
+                        const monthDifference = today.getMonth() - creationDate.getMonth();
+                        const dayDifference = today.getDate() - creationDate.getDate();
+
+                        // Adjust age if birthday hasn't occurred yet this year
+                        if (monthDifference < 0 || (monthDifference === 0 && dayDifference < 0)) {
+                            ageInYears--;
+                        }
+                        // Ensure age is not negative (e.g., if date is in the future, which shouldn't happen for creation date)
+                        if (ageInYears < 0) {
+                            ageInYears = 0;
+                        }
+
                         createdAtDisplay.textContent = createdAtUtc;
-                        githubStatusDisplay.textContent = `Successfully found creation date for user "${username}".`; // New: Status for lookup success
+                        accountAgeDisplay.textContent = `${ageInYears} years`; // Display age with "years"
+                        githubStatusDisplay.textContent = `Successfully found creation date and age for user "${username}".`;
                     } else {
-                        throw new Error("Could not find creation date for this user."); // No date found, treat as an error
+                        throw new Error("Could not find creation date for this user.");
                     }
 
                 } catch (error) {
                     console.error("Fetch error:", error);
                     errorMessageDisplay.textContent = `Error: ${error.message}`;
-                    githubStatusDisplay.textContent = `Error: ${error.message}`; // New: Status for lookup failure
+                    githubStatusDisplay.textContent = `Error: ${error.message}`;
                 }
             });
         });
