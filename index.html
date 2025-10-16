@@ -27,9 +27,21 @@
             color: #dc3545;
             margin-top: 10px;
         }
+        .visually-hidden {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+        }
     </style>
 </head>
 <body>
+    <div id="github-status" aria-live="polite" class="visually-hidden"></div>
     <div class="container">
         <h1 class="mb-4 text-center">GitHub User Creation Date</h1>
 
@@ -63,10 +75,11 @@
             const usernameInput = document.getElementById("usernameInput");
             const createdAtDisplay = document.getElementById("github-created-at");
             const errorMessageDisplay = document.getElementById("errorMessage");
+            const githubStatusDisplay = document.getElementById("github-status"); // New: Reference to aria-live region
 
             // Function to get a URL parameter
             function getUrlParameter(name) {
-                name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+                name = name.replace(/[\\[]/, '\\[').replace(/[\\]]/, '\\]');
                 const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
                 const results = regex.exec(location.search);
                 return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
@@ -79,16 +92,19 @@
                 createdAtDisplay.textContent = '---';
                 errorMessageDisplay.textContent = '';
                 githubForm.classList.remove('was-validated');
+                githubStatusDisplay.textContent = ''; // New: Clear previous status
 
                 // Form validation
                 if (!githubForm.checkValidity()) {
                     githubForm.classList.add('was-validated');
+                    githubStatusDisplay.textContent = "Please enter a GitHub username to proceed with lookup."; // New: Status for validation error
                     return;
                 }
 
                 const username = usernameInput.value.trim();
                 if (!username) {
                     errorMessageDisplay.textContent = "Please enter a GitHub username.";
+                    githubStatusDisplay.textContent = "Please enter a GitHub username."; // New: Status for empty username
                     return;
                 }
 
@@ -102,17 +118,21 @@
                     headers['Authorization'] = `token ${githubToken}`;
                 }
 
+                githubStatusDisplay.textContent = `Looking up GitHub user "${username}"...`; // New: Status for lookup start
+
                 try {
                     const response = await fetch(githubApiUrl, { headers: headers });
 
                     if (!response.ok) {
+                        let errorMsg;
                         if (response.status === 404) {
-                            throw new Error(`User "${username}" not found.`);
+                            errorMsg = `User "${username}" not found.`;
                         } else if (response.status === 403 && response.headers.get('X-RateLimit-Remaining') === '0') {
-                            throw new Error('API Rate Limit Exceeded. Please try again later or use a token.');
+                            errorMsg = 'API Rate Limit Exceeded. Please try again later or use a token.';
                         } else {
-                            throw new Error(`GitHub API error: ${response.status} - ${response.statusText}`);
+                            errorMsg = `GitHub API error: ${response.status} - ${response.statusText}`;
                         }
+                        throw new Error(errorMsg); // Throw error to be caught below
                     }
 
                     const data = await response.json();
@@ -123,13 +143,15 @@
                         // We take the part before 'T'
                         const createdAtUtc = new Date(data.created_at).toISOString().split('T')[0];
                         createdAtDisplay.textContent = createdAtUtc;
+                        githubStatusDisplay.textContent = `Successfully found creation date for user "${username}".`; // New: Status for lookup success
                     } else {
-                        errorMessageDisplay.textContent = "Could not find creation date for this user.";
+                        throw new Error("Could not find creation date for this user."); // No date found, treat as an error
                     }
 
                 } catch (error) {
                     console.error("Fetch error:", error);
                     errorMessageDisplay.textContent = `Error: ${error.message}`;
+                    githubStatusDisplay.textContent = `Error: ${error.message}`; // New: Status for lookup failure
                 }
             });
         });
